@@ -3,9 +3,14 @@ package sqlcluster
 import (
 	"context"
 	"database/sql"
+	"math/rand"
+	"os"
+	"time"
 
 	"github.com/jmoiron/sqlx"
 )
+
+var rn = rand.New(rand.NewSource(time.Now().UnixNano() * int64(os.Getpid())))
 
 func newReader(db *sqlx.DB) *Reader {
 	r := &Reader{DB: db}
@@ -25,133 +30,151 @@ type Writer struct {
 	*sqlx.DB
 }
 
-func NewClusterDB(w *sql.DB, r *sql.DB, driverName string) *ClusterDB {
+func NewClusterDB(w *sql.DB, r []*sql.DB, driverName string) *ClusterDB {
 	c := &ClusterDB{
 		w: newWriter(sqlx.NewDb(w, driverName)),
-		r: newReader(sqlx.NewDb(r, driverName)),
+	}
+	for i := 0; i < len(r); i++ {
+		c.r = append(c.r, newReader(sqlx.NewDb(r[i], driverName)))
 	}
 	return c
 }
 
 type ClusterDB struct {
 	w *Writer
-	r *Reader
+	r []*Reader
 }
 
-func (c *ClusterDB) R() *Reader {
-	return c.r
+func (c *ClusterDB) R() *sqlx.DB {
+	return c.DB(true)
 }
 
-func (c *ClusterDB) W() *Writer {
-	return c.w
+func (c *ClusterDB) W() *sqlx.DB {
+	return c.DB(false)
 }
 
 func (c *ClusterDB) Begin() (*sql.Tx, error) {
-	return c.w.DB.Begin()
+	return c.DB(false).Begin()
 }
 
 func (c *ClusterDB) BeginTx(ctx context.Context, opts *sql.TxOptions) (*sql.Tx, error) {
-	return c.w.DB.BeginTx(ctx, opts)
+	return c.DB(false).BeginTx(ctx, opts)
 }
 
 func (c *ClusterDB) Exec(query string, args ...interface{}) (sql.Result, error) {
-	return c.w.DB.Exec(query, args)
+	return c.DB(false).Exec(query, args)
 }
 
 func (c *ClusterDB) ExecContext(ctx context.Context, query string, args ...interface{}) (sql.Result, error) {
-	return c.w.DB.ExecContext(ctx, query, args)
+	return c.DB(false).ExecContext(ctx, query, args)
 }
 
 func (c *ClusterDB) Ping() error {
-	if err := c.r.DB.Ping(); err != nil {
-		return err
-	}
-	return c.w.DB.Ping()
+	return c.PingContext(context.TODO())
 }
 
 func (c *ClusterDB) PingContext(ctx context.Context) error {
-	if err := c.r.DB.PingContext(ctx); err != nil {
+	if err := c.w.DB.PingContext(ctx); err != nil {
 		return err
 	}
-	return c.w.DB.PingContext(ctx)
+	for i := 0; i < len(c.r); i++ {
+		if err := c.r[i].DB.PingContext(ctx); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func (c *ClusterDB) Prepare(query string) (*sql.Stmt, error) {
-	return c.w.DB.Prepare(query)
+	return c.DB(false).Prepare(query)
 }
 
 func (c *ClusterDB) PrepareContext(ctx context.Context, query string) (*sql.Stmt, error) {
-	return c.w.DB.PrepareContext(ctx, query)
+	return c.DB(false).PrepareContext(ctx, query)
 }
 
 func (c *ClusterDB) Query(query string, args ...interface{}) (*sql.Rows, error) {
-	return c.r.DB.Query(query, args)
+	return c.DB(true).Query(query, args)
 }
 
 func (c *ClusterDB) QueryContext(ctx context.Context, query string, args ...interface{}) (*sql.Rows, error) {
-	return c.r.DB.QueryContext(ctx, query, args)
+	return c.DB(true).QueryContext(ctx, query, args)
 }
 
 func (c *ClusterDB) QueryRow(query string, args ...interface{}) *sql.Row {
-	return c.r.DB.QueryRow(query, args)
+	return c.DB(true).QueryRow(query, args)
 }
 
 func (c *ClusterDB) QueryRowContext(ctx context.Context, query string, args ...interface{}) *sql.Row {
-	return c.r.DB.QueryRowContext(ctx, query, args)
+	return c.DB(true).QueryRowContext(ctx, query, args)
 }
 
 func (c *ClusterDB) Beginx() (*sqlx.Tx, error) {
-	return c.w.DB.Beginx()
+	return c.DB(false).Beginx()
 }
 
 func (c *ClusterDB) BeginxTx(ctx context.Context, opts *sql.TxOptions) (*sqlx.Tx, error) {
-	return c.w.DB.BeginTxx(ctx, opts)
+	return c.DB(false).BeginTxx(ctx, opts)
 }
 
 func (c *ClusterDB) NamedExec(query string, arg interface{}) (sql.Result, error) {
-	return c.w.DB.NamedExec(query, arg)
+	return c.DB(false).NamedExec(query, arg)
 }
 
 func (c *ClusterDB) NamedExecContext(ctx context.Context, query string, arg interface{}) (sql.Result, error) {
-	return c.w.DB.NamedExecContext(ctx, query, arg)
+	return c.DB(false).NamedExecContext(ctx, query, arg)
 }
 
 func (c *ClusterDB) Get(dest interface{}, query string, args ...interface{}) error {
-	return c.r.DB.Get(dest, query, args)
+	return c.DB(true).Get(dest, query, args)
 }
 
 func (c *ClusterDB) GetContext(ctx context.Context, dest interface{}, query string, args ...interface{}) error {
-	return c.r.DB.GetContext(ctx, dest, query, args)
+	return c.DB(true).GetContext(ctx, dest, query, args)
 }
 
 func (c *ClusterDB) Select(dest interface{}, query string, args ...interface{}) error {
-	return c.r.DB.Select(dest, query, args)
+	return c.DB(true).Select(dest, query, args)
 }
 
 func (c *ClusterDB) SelectContext(ctx context.Context, dest interface{}, query string, args ...interface{}) error {
-	return c.r.DB.SelectContext(ctx, dest, query, args)
+	return c.DB(true).SelectContext(ctx, dest, query, args)
 }
 
 func (c *ClusterDB) PrepareNamed(dest interface{}, query string) (*sqlx.NamedStmt, error) {
-	return c.w.DB.PrepareNamed(query)
+	return c.DB(false).PrepareNamed(query)
 }
 
 func (c *ClusterDB) PrepareNamedContext(ctx context.Context, query string) (*sqlx.NamedStmt, error) {
-	return c.w.DB.PrepareNamedContext(ctx, query)
+	return c.DB(false).PrepareNamedContext(ctx, query)
 }
 
 func (c *ClusterDB) Queryx(query string, args ...interface{}) (*sqlx.Rows, error) {
-	return c.r.DB.Queryx(query, args)
+	return c.DB(true).Queryx(query, args)
 }
 
 func (c *ClusterDB) QueryxContext(ctx context.Context, query string, args ...interface{}) (*sqlx.Rows, error) {
-	return c.r.DB.QueryxContext(ctx, query, args)
+	return c.DB(true).QueryxContext(ctx, query, args)
 }
 
 func (c *ClusterDB) QueryRowx(query string, args ...interface{}) *sqlx.Row {
-	return c.r.DB.QueryRowx(query, args)
+	return c.DB(true).QueryRowx(query, args)
 }
 
 func (c *ClusterDB) QueryRowxContext(ctx context.Context, query string, args ...interface{}) *sqlx.Row {
-	return c.r.DB.QueryRowxContext(ctx, query, args)
+	return c.DB(true).QueryRowxContext(ctx, query, args)
+}
+
+func (c *ClusterDB) DB(readOnly bool) *sqlx.DB {
+	if !readOnly {
+		return c.w.DB
+	}
+	switch len(c.r) {
+	case 0:
+		return nil
+	case 1:
+		return c.r[0].DB
+	default:
+		return c.r[rn.Intn(len(c.r))].DB
+	}
 }
