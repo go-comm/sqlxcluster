@@ -12,44 +12,30 @@ import (
 
 var rn = rand.New(rand.NewSource(time.Now().UnixNano() * int64(os.Getpid())))
 
-func newReader(db *sqlx.DB) *Reader {
-	r := &Reader{DB: db}
-	return r
-}
-
-type Reader struct {
-	*sqlx.DB
-}
-
-func newWriter(db *sqlx.DB) *Writer {
-	w := &Writer{DB: db}
-	return w
-}
-
-type Writer struct {
+type ConnectPool struct {
 	*sqlx.DB
 }
 
 func NewClusterDB(w *sql.DB, r []*sql.DB, driverName string) *ClusterDB {
 	c := &ClusterDB{
-		w: newWriter(sqlx.NewDb(w, driverName)),
+		w: &ConnectPool{DB: sqlx.NewDb(w, driverName)},
 	}
 	for i := 0; i < len(r); i++ {
-		c.r = append(c.r, newReader(sqlx.NewDb(r[i], driverName)))
+		c.r = append(c.r, &ConnectPool{DB: sqlx.NewDb(w, driverName)})
 	}
 	return c
 }
 
 type ClusterDB struct {
-	w *Writer
-	r []*Reader
+	w *ConnectPool
+	r []*ConnectPool
 }
 
-func (c *ClusterDB) R() *sqlx.DB {
+func (c *ClusterDB) R() *ConnectPool {
 	return c.DB(true)
 }
 
-func (c *ClusterDB) W() *sqlx.DB {
+func (c *ClusterDB) W() *ConnectPool {
 	return c.DB(false)
 }
 
@@ -165,16 +151,16 @@ func (c *ClusterDB) QueryRowxContext(ctx context.Context, query string, args ...
 	return c.DB(true).QueryRowxContext(ctx, query, args...)
 }
 
-func (c *ClusterDB) DB(readOnly bool) *sqlx.DB {
+func (c *ClusterDB) DB(readOnly bool) *ConnectPool {
 	if !readOnly {
-		return c.w.DB
+		return c.w
 	}
 	switch len(c.r) {
 	case 0:
 		return nil
 	case 1:
-		return c.r[0].DB
+		return c.r[0]
 	default:
-		return c.r[rn.Intn(len(c.r))].DB
+		return c.r[rn.Intn(len(c.r))]
 	}
 }
