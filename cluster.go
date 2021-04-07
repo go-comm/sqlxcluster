@@ -1,4 +1,4 @@
-package sqlcluster
+package sqlxcluster
 
 import (
 	"context"
