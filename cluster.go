@@ -151,6 +151,14 @@ func (c *ClusterDB) QueryRowxContext(ctx context.Context, query string, args ...
 	return c.DB(true).QueryRowxContext(ctx, query, args...)
 }
 
+func (c *ClusterDB) NamedQuery(query string, arg interface{}) (*sqlx.Rows, error) {
+	return c.DB(true).NamedQuery(query, arg)
+}
+
+func (c *ClusterDB) NamedQueryContext(ctx context.Context, query string, arg interface{}) (*sqlx.Rows, error) {
+	return c.DB(true).NamedQueryContext(ctx, query, arg)
+}
+
 func (c *ClusterDB) DB(readOnly bool) *ConnectPool {
 	if !readOnly {
 		return c.w
