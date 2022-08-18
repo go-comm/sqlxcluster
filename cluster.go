@@ -99,7 +99,7 @@ func (c *ClusterDB) Beginx() (*sqlx.Tx, error) {
 	return c.DB(false).Beginx()
 }
 
-func (c *ClusterDB) BeginxTx(ctx context.Context, opts *sql.TxOptions) (*sqlx.Tx, error) {
+func (c *ClusterDB) BeginTxx(ctx context.Context, opts *sql.TxOptions) (*sqlx.Tx, error) {
 	return c.DB(false).BeginTxx(ctx, opts)
 }
 
