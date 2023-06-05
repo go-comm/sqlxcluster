@@ -14,7 +14,14 @@ import (
 var rn = rand.New(rand.NewSource(time.Now().UnixNano() * int64(os.Getpid())))
 
 type options struct {
+	Name      string
 	EnableLog bool
+}
+
+func WithName(name string) func(os *options) {
+	return func(os *options) {
+		os.Name = name
+	}
 }
 
 func WithEnableLog(enableLog bool) func(os *options) {
@@ -23,13 +30,13 @@ func WithEnableLog(enableLog bool) func(os *options) {
 	}
 }
 
-func NewClusterDB(name string, w *sql.DB, r []*sql.DB, driverName string, opts ...func(os *options)) *ClusterDB {
+func NewClusterDB(w *sql.DB, r []*sql.DB, driverName string, opts ...func(os *options)) *ClusterDB {
 	os := new(options)
 	for _, opt := range opts {
 		opt(os)
 	}
 	c := &ClusterDB{
-		name: name,
+		name: os.Name,
 		w:    newConnectPool(w, driverName),
 	}
 	if len(r) <= 0 {
