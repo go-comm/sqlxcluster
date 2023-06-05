@@ -3,6 +3,7 @@ package sqlxcluster
 import (
 	"context"
 	"database/sql"
+	"fmt"
 	"math/rand"
 	"os"
 	"time"
@@ -12,30 +13,53 @@ import (
 
 var rn = rand.New(rand.NewSource(time.Now().UnixNano() * int64(os.Getpid())))
 
-type ConnectPool struct {
-	*sqlx.DB
+type options struct {
+	EnableLog bool
 }
 
-func NewClusterDB(w *sql.DB, r []*sql.DB, driverName string) *ClusterDB {
-	c := &ClusterDB{
-		w: &ConnectPool{DB: sqlx.NewDb(w, driverName)},
+func WithEnableLog(enableLog bool) func(os *options) {
+	return func(os *options) {
+		os.EnableLog = enableLog
 	}
-	for i := 0; i < len(r); i++ {
-		c.r = append(c.r, &ConnectPool{DB: sqlx.NewDb(w, driverName)})
+}
+
+func NewClusterDB(w *sql.DB, r []*sql.DB, driverName string, opts ...func(os *options)) *ClusterDB {
+	os := new(options)
+	for _, opt := range opts {
+		opt(os)
+	}
+	c := &ClusterDB{
+		w: newConnectPool(w, driverName),
+	}
+	if len(r) <= 0 {
+		panic(fmt.Errorf("cluster: rdb is required"))
+	} else {
+		for _, e := range r {
+			c.r = append(c.r, newConnectPool(e, driverName))
+		}
 	}
 	return c
 }
 
 type ClusterDB struct {
-	w *ConnectPool
-	r []*ConnectPool
+	w    ConnectPool
+	r    []ConnectPool
+	meta interface{}
 }
 
-func (c *ClusterDB) R() *ConnectPool {
+func (c *ClusterDB) Meta() interface{} {
+	return c.meta
+}
+
+func (c *ClusterDB) SetMeta(meta interface{}) {
+	c.meta = meta
+}
+
+func (c *ClusterDB) R() ConnectPool {
 	return c.DB(true)
 }
 
-func (c *ClusterDB) W() *ConnectPool {
+func (c *ClusterDB) W() ConnectPool {
 	return c.DB(false)
 }
 
@@ -60,11 +84,11 @@ func (c *ClusterDB) Ping() error {
 }
 
 func (c *ClusterDB) PingContext(ctx context.Context) error {
-	if err := c.w.DB.PingContext(ctx); err != nil {
+	if err := c.w.PingContext(ctx); err != nil {
 		return err
 	}
 	for i := 0; i < len(c.r); i++ {
-		if err := c.r[i].DB.PingContext(ctx); err != nil {
+		if err := c.r[i].PingContext(ctx); err != nil {
 			return err
 		}
 	}
@@ -127,7 +151,7 @@ func (c *ClusterDB) SelectContext(ctx context.Context, dest interface{}, query s
 	return c.DB(true).SelectContext(ctx, dest, query, args...)
 }
 
-func (c *ClusterDB) PrepareNamed(dest interface{}, query string) (*sqlx.NamedStmt, error) {
+func (c *ClusterDB) PrepareNamed(query string) (*sqlx.NamedStmt, error) {
 	return c.DB(false).PrepareNamed(query)
 }
 
@@ -159,7 +183,7 @@ func (c *ClusterDB) NamedQueryContext(ctx context.Context, query string, arg int
 	return c.DB(true).NamedQueryContext(ctx, query, arg)
 }
 
-func (c *ClusterDB) DB(readOnly bool) *ConnectPool {
+func (c *ClusterDB) DB(readOnly bool) ConnectPool {
 	if !readOnly {
 		return c.w
 	}
