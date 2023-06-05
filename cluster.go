@@ -23,13 +23,14 @@ func WithEnableLog(enableLog bool) func(os *options) {
 	}
 }
 
-func NewClusterDB(w *sql.DB, r []*sql.DB, driverName string, opts ...func(os *options)) *ClusterDB {
+func NewClusterDB(name string, w *sql.DB, r []*sql.DB, driverName string, opts ...func(os *options)) *ClusterDB {
 	os := new(options)
 	for _, opt := range opts {
 		opt(os)
 	}
 	c := &ClusterDB{
-		w: newConnectPool(w, driverName),
+		name: name,
+		w:    newConnectPool(w, driverName),
 	}
 	if len(r) <= 0 {
 		panic(fmt.Errorf("cluster: rdb is required"))
@@ -44,7 +45,16 @@ func NewClusterDB(w *sql.DB, r []*sql.DB, driverName string, opts ...func(os *op
 type ClusterDB struct {
 	w    ConnectPool
 	r    []ConnectPool
+	name string
 	meta interface{}
+}
+
+func (c *ClusterDB) Name() string {
+	return c.name
+}
+
+func (c *ClusterDB) SetName(name string) {
+	c.name = name
 }
 
 func (c *ClusterDB) Meta() interface{} {
