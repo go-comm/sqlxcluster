@@ -60,7 +60,7 @@ func (db *loggedDB) log(err0 error, elapsed time.Duration, query string, args ..
 		b = append(b, "\033[31m[FAIL]\033[0m"...)
 	}
 
-	elapsed = elapsed / time.Millisecond
+	elapsed = elapsed / time.Millisecond * time.Millisecond
 	b = append(b, " \033[33m["...)
 	b = append(b, elapsed.String()...)
 	b = append(b, "]\033[0m"...)
