@@ -23,6 +23,14 @@ func NewLoggedDB(db DB) DB {
 	return &loggedDB{DB: db}
 }
 
+func unwrapLoggedDB(db DB) DB {
+	u, ok := db.(interface{ Unwrap() DB })
+	if ok {
+		return u.Unwrap()
+	}
+	return db
+}
+
 type loggedDB struct {
 	DB
 
@@ -57,6 +65,10 @@ func (db *loggedDB) log(err0 error, query string, args ...interface{}) {
 		out = defaultOutput
 	}
 	out(b)
+}
+
+func (db *loggedDB) Unwrap() DB {
+	return db.DB
 }
 
 func (db *loggedDB) Exec(query string, args ...interface{}) (d sql.Result, err error) {

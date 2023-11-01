@@ -69,6 +69,6 @@ type wrappedDB struct {
 	*sqlx.DB
 }
 
-func (w *wrappedDB) Unwrap() *sqlx.DB {
-	return w.DB
+func (w *wrappedDB) Unwrap() *sql.DB {
+	return w.DB.DB
 }
