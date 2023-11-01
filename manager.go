@@ -1,46 +1,87 @@
 package sqlxcluster
 
 import (
+	"database/sql"
 	"sync"
 )
 
-func NewClusterDBManager() *ClusterDBManager {
-	m := &ClusterDBManager{clusters: map[string]*ClusterDB{}}
-	return m
+type DBManager struct {
+	mutex       sync.RWMutex
+	pools       map[string]DB
+	lazyAddFunc func(name string) (DB, error)
 }
 
-type ClusterDBManager struct {
-	mutex    sync.RWMutex
-	clusters map[string]*ClusterDB
-}
-
-func (m *ClusterDBManager) Add(db *ClusterDB) {
+func (m *DBManager) Add(name string, db DB) {
 	m.mutex.Lock()
 	defer m.mutex.Unlock()
-	m.clusters[db.Name()] = db
+	if m.pools == nil {
+		m.pools = make(map[string]DB)
+	}
+	m.pools[name] = db
 }
 
-func (m *ClusterDBManager) Get(name string) *ClusterDB {
+func (m *DBManager) OnLazyAdd(f func(name string) (DB, error)) {
+	m.lazyAddFunc = f
+}
+
+func (m *DBManager) Get(name string) (DB, error) {
 	m.mutex.RLock()
-	defer m.mutex.RUnlock()
-	return m.clusters[name]
+	db := m.pools[name]
+	m.mutex.RUnlock()
+	if db != nil {
+		return db, nil
+	}
+	f := m.lazyAddFunc
+	if f != nil {
+		var err error
+		func() {
+			m.mutex.Lock()
+			defer m.mutex.Unlock()
+
+			if m.pools == nil {
+				m.pools = make(map[string]DB)
+			}
+			db = m.pools[name]
+			if db == nil {
+				db, err = f(name)
+				if err == nil {
+					m.pools[name] = db
+				}
+			}
+		}()
+		if err != nil {
+			return nil, err
+		}
+	}
+	if db != nil {
+		return db, nil
+	}
+	return nil, sql.ErrConnDone
 }
 
-func (m *ClusterDBManager) Names() []string {
+func (m *DBManager) MustGet(name string) DB {
+	db, err := m.Get(name)
+	if err == nil {
+		return db
+	}
+	panic(err)
+}
+
+func (m *DBManager) Names() []string {
 	m.mutex.RLock()
 	defer m.mutex.RUnlock()
 	var ls []string
-	for k := range m.clusters {
+	for k := range m.pools {
 		ls = append(ls, k)
 	}
 	return ls
 }
 
-func (m *ClusterDBManager) DBs() []*ClusterDB {
+func (m *DBManager) DBs() []DB {
 	m.mutex.RLock()
 	defer m.mutex.RUnlock()
-	var ls []*ClusterDB
-	for _, v := range m.clusters {
+	var ls []DB
+	for _, v := range m.pools {
 		ls = append(ls, v)
 	}
 	return ls
