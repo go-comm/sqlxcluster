@@ -41,7 +41,7 @@ func NewClusterDB(w *sql.DB, r []*sql.DB, driverName string, opts ...func(os *op
 		c.r = append(c.r, NewDB(e, driverName))
 	}
 	c.SetName(os.name)
-	c.SetEnableLog(c.enableLog)
+	c.SetEnableLog(os.enableLog)
 	return c
 }
 
