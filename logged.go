@@ -43,7 +43,7 @@ func (db *loggedDB) log(err0 error, query string, args ...interface{}) {
 	b = append(b, query...)
 
 	if len(args) > 0 {
-		b = append(b, "{"...)
+		b = append(b, "    {"...)
 		b = append(b, fmt.Sprintf("%v", args[0])...)
 		for _, arg := range args[1:] {
 			b = append(b, ", "...)
@@ -51,6 +51,7 @@ func (db *loggedDB) log(err0 error, query string, args ...interface{}) {
 		}
 		b = append(b, "}"...)
 	}
+
 	out := db.out
 	if out == nil {
 		out = defaultOutput
