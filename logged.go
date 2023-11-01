@@ -15,7 +15,7 @@ var (
 	stdlog = log.New(os.Stderr, "", log.LstdFlags|log.Llongfile)
 
 	defaultOutput = func(b []byte) (int, error) {
-		stdlog.Println(string(b))
+		stdlog.Output(5, string(b))
 		return len(b), nil
 	}
 )
