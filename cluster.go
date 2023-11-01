@@ -24,7 +24,7 @@ func WithEnableLog(enableLog bool) func(os *ClusterDB) {
 	}
 }
 
-func NewClusterdb(w *sql.DB, r []*sql.DB, driverName string, opts ...func(os *ClusterDB)) *ClusterDB {
+func NewClusterDB(w *sql.DB, r []*sql.DB, driverName string, opts ...func(os *ClusterDB)) *ClusterDB {
 	c := &ClusterDB{
 		DB: NewDB(w, driverName),
 	}
