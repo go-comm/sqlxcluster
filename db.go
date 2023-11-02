@@ -9,7 +9,10 @@ import (
 	"github.com/jmoiron/sqlx"
 )
 
+var _ sql.Tx
+var _ sql.DB
 var _ DB = (*sqlx.DB)(nil)
+var _ Tx = (*sqlx.Tx)(nil)
 
 type Command interface {
 	Exec(query string, args ...interface{}) (sql.Result, error)
@@ -61,6 +64,14 @@ type DB interface {
 	Command
 }
 
+type Tx interface {
+	DriverName() string
+	Commit() error
+	Rollback() error
+
+	Command
+}
+
 func NewDB(db *sql.DB, driverName string) DB {
 	return &wrappedDB{DB: sqlx.NewDb(db, driverName)}
 }
@@ -71,4 +82,26 @@ type wrappedDB struct {
 
 func (w *wrappedDB) Unwrap() *sql.DB {
 	return w.DB.DB
+}
+
+func Begin(db DB) (tx Tx, err error) {
+	tx, err = db.Beginx()
+	if err != nil {
+		return tx, err
+	}
+	if ldb, ok := db.(*loggedDB); ok {
+		tx = NewLoggedTx(tx, ldb.color, ldb.out)
+	}
+	return tx, err
+}
+
+func BeginTx(db DB, ctx context.Context, opts *sql.TxOptions) (tx Tx, err error) {
+	tx, err = db.BeginTxx(ctx, opts)
+	if err != nil {
+		return tx, err
+	}
+	if ldb, ok := db.(*loggedDB); ok {
+		tx = NewLoggedTx(tx, ldb.color, ldb.out)
+	}
+	return tx, err
 }

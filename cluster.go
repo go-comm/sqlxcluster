@@ -15,6 +15,8 @@ var rn = rand.New(rand.NewSource(time.Now().UnixNano() * int64(os.Getpid())))
 type options struct {
 	name      string
 	enableLog bool
+	color     bool
+	out       func(b []byte) (int, error)
 }
 
 func WithName(name string) func(os *options) {
@@ -26,6 +28,18 @@ func WithName(name string) func(os *options) {
 func WithEnableLog(enableLog bool) func(os *options) {
 	return func(os *options) {
 		os.enableLog = enableLog
+	}
+}
+
+func WithColor(color bool) func(os *options) {
+	return func(os *options) {
+		os.color = color
+	}
+}
+
+func WithOutput(out func(b []byte) (int, error)) func(os *options) {
+	return func(os *options) {
+		os.out = out
 	}
 }
 
@@ -41,7 +55,7 @@ func NewClusterDB(w *sql.DB, r []*sql.DB, driverName string, opts ...func(os *op
 		c.r = append(c.r, NewDB(e, driverName))
 	}
 	c.SetName(os.name)
-	c.SetEnableLog(os.enableLog)
+	c.SetLog(os.enableLog, os.color, os.out)
 	return c
 }
 
@@ -51,20 +65,24 @@ type ClusterDB struct {
 	DB             // write + read
 	r         []DB // only read
 	name      string
-	enableLog bool
 	meta      interface{}
+	enableLog bool
+	color     bool
+	out       func(b []byte) (int, error)
 }
 
-func (c *ClusterDB) SetEnableLog(enable bool) {
-	if c.enableLog == enable {
-		return
+func (c *ClusterDB) SetLog(enable bool, color bool, out func(b []byte) (int, error)) {
+	if out == nil {
+		out = defaultOut
 	}
 	c.enableLog = enable
+	c.color = color
+	c.out = out
 	r := c.r
 	if enable {
-		c.DB = NewLoggedDB(c.DB)
+		c.DB = NewLoggedDB(c.DB, color, out)
 		for i := 0; i < len(r); i++ {
-			r[i] = NewLoggedDB(r[i])
+			r[i] = NewLoggedDB(r[i], color, out)
 		}
 	} else {
 		c.DB = unwrapLoggedDB(c.DB)
