@@ -59,7 +59,10 @@ func NewClusterDB(w *sql.DB, r []*sql.DB, driverName string, opts ...func(os *op
 	return c
 }
 
-var _ DB = (*ClusterDB)(nil)
+var (
+	_ DB     = (*ClusterDB)(nil)
+	_ logged = (*ClusterDB)(nil)
+)
 
 type ClusterDB struct {
 	DB             // write + read
@@ -208,4 +211,16 @@ func (c *ClusterDB) db(readOnly bool) DB {
 	default:
 		return c.r[rn.Intn(len(c.r))]
 	}
+}
+
+func (c *ClusterDB) Logged() bool {
+	return c.enableLog
+}
+
+func (c *ClusterDB) Colored() bool {
+	return c.color
+}
+
+func (c *ClusterDB) Output() func(b []byte) (int, error) {
+	return c.out
 }

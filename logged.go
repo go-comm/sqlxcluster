@@ -28,6 +28,17 @@ var (
 	_, _, _, _, _, _, _ = colorRed, colorGreen, colorYellow, colorBlue, colorPurple, colorWhite, colorEnd
 )
 
+var (
+	_ logged = (*loggedDB)(nil)
+	_ logged = (*loggedTx)(nil)
+)
+
+type logged interface {
+	Logged() bool
+	Colored() bool
+	Output() func(b []byte) (int, error)
+}
+
 func defaultOut(b []byte) (int, error) {
 	stdlog.Output(5, string(b))
 	return len(b), nil
@@ -105,12 +116,24 @@ func (db *loggedDB) Unwrap() DB {
 	return db.DB
 }
 
+func (db *loggedDB) Logged() bool {
+	return true
+}
+
 func (db *loggedDB) SetColor(color bool) {
 	db.color = color
 }
 
 func (db *loggedDB) SetOutput(out func([]byte) (int, error)) {
 	db.out = out
+}
+
+func (db *loggedDB) Colored() bool {
+	return db.color
+}
+
+func (db *loggedDB) Output() func(b []byte) (int, error) {
+	return db.out
 }
 
 func (db *loggedDB) Exec(query string, args ...interface{}) (d sql.Result, err error) {
@@ -288,12 +311,24 @@ func (db *loggedTx) Unwrap() Tx {
 	return db.Tx
 }
 
+func (db *loggedTx) Logged() bool {
+	return true
+}
+
 func (db *loggedTx) SetColor(color bool) {
 	db.color = color
 }
 
 func (db *loggedTx) SetOutput(out func([]byte) (int, error)) {
 	db.out = out
+}
+
+func (db *loggedTx) Colored() bool {
+	return db.color
+}
+
+func (db *loggedTx) Output() func(b []byte) (int, error) {
+	return db.out
 }
 
 func (db *loggedTx) Exec(query string, args ...interface{}) (d sql.Result, err error) {

@@ -89,8 +89,8 @@ func Begin(db DB) (tx Tx, err error) {
 	if err != nil {
 		return tx, err
 	}
-	if ldb, ok := db.(*loggedDB); ok {
-		tx = NewLoggedTx(tx, ldb.color, ldb.out)
+	if ldb, ok := db.(logged); ok && ldb.Logged() {
+		tx = NewLoggedTx(tx, ldb.Colored(), ldb.Output())
 	}
 	return tx, err
 }
@@ -100,8 +100,8 @@ func BeginTx(db DB, ctx context.Context, opts *sql.TxOptions) (tx Tx, err error)
 	if err != nil {
 		return tx, err
 	}
-	if ldb, ok := db.(*loggedDB); ok {
-		tx = NewLoggedTx(tx, ldb.color, ldb.out)
+	if ldb, ok := db.(logged); ok && ldb.Logged() {
+		tx = NewLoggedTx(tx, ldb.Colored(), ldb.Output())
 	}
 	return tx, err
 }
