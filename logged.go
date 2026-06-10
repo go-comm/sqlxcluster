@@ -7,13 +7,19 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"sync"
 	"time"
 
 	"github.com/jmoiron/sqlx"
 )
 
 var (
-	stdlog = log.New(os.Stderr, "", log.LstdFlags|log.Llongfile)
+	stdlog  = log.New(os.Stderr, "", log.LstdFlags|log.Llongfile)
+	bufPool = sync.Pool{
+		New: func() interface{} {
+			return bytes.NewBuffer(nil)
+		},
+	}
 )
 
 var (
@@ -59,7 +65,9 @@ func output(out func([]byte) (int, error), err0 error, enableColor bool, elapsed
 	// 2009/01/23 01:23:23 /a/b/c/d.go:23: error
 	// [OK] [200ms] select * from user
 
-	var b = bytes.NewBuffer(nil)
+	b := bufPool.Get().(*bytes.Buffer)
+	b.Reset()
+	defer bufPool.Put(b)
 
 	if err0 != nil && err0 != sql.ErrNoRows {
 		writeColorBytes(b, enableColor, colorRed, []byte(err0.Error()))
@@ -73,7 +81,9 @@ func output(out func([]byte) (int, error), err0 error, enableColor bool, elapsed
 	}
 
 	elapsed = elapsed / time.Millisecond * time.Millisecond
-	writeColorBytes(b, enableColor, colorYellow, []byte(" ["+elapsed.String()+"]"))
+	writeColorBytes(b, enableColor, colorYellow, []byte(" ["))
+	b.WriteString(elapsed.String())
+	writeColorBytes(b, enableColor, colorYellow, []byte("]"))
 	b.WriteString(" ")
 	writeColorBytes(b, enableColor, colorPurple, []byte(query))
 
@@ -257,7 +267,7 @@ func (db *loggedDB) PreparexContext(ctx context.Context, query string) (d *sqlx.
 
 func (db *loggedDB) QueryRowx(query string, args ...interface{}) (d *sqlx.Row) {
 	t0 := time.Now()
-	d = db.DB.QueryRowx(query)
+	d = db.DB.QueryRowx(query, args...)
 	output(db.out, d.Err(), db.color, time.Since(t0), query, args...)
 	return
 }
@@ -452,7 +462,7 @@ func (db *loggedTx) PreparexContext(ctx context.Context, query string) (d *sqlx.
 
 func (db *loggedTx) QueryRowx(query string, args ...interface{}) (d *sqlx.Row) {
 	t0 := time.Now()
-	d = db.Tx.QueryRowx(query)
+	d = db.Tx.QueryRowx(query, args...)
 	output(db.out, d.Err(), db.color, time.Since(t0), query, args...)
 	return
 }

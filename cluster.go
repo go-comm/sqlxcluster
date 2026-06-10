@@ -4,13 +4,9 @@ import (
 	"context"
 	"database/sql"
 	"math/rand"
-	"os"
-	"time"
 
 	"github.com/jmoiron/sqlx"
 )
-
-var rn = rand.New(rand.NewSource(time.Now().UnixNano() * int64(os.Getpid())))
 
 type options struct {
 	name      string
@@ -209,7 +205,7 @@ func (c *ClusterDB) db(readOnly bool) DB {
 	case 1:
 		return c.r[0]
 	default:
-		return c.r[rn.Intn(len(c.r))]
+		return c.r[rand.Intn(len(c.r))]
 	}
 }
 
