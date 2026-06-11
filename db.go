@@ -83,25 +83,3 @@ type wrappedDB struct {
 func (w *wrappedDB) Unwrap() *sql.DB {
 	return w.DB.DB
 }
-
-func Begin(db DB) (tx Tx, err error) {
-	tx, err = db.Beginx()
-	if err != nil {
-		return tx, err
-	}
-	if ldb, ok := db.(logged); ok && ldb.Logged() {
-		tx = NewLoggedTx(tx, ldb.Colored(), ldb.Output())
-	}
-	return tx, err
-}
-
-func BeginTx(db DB, ctx context.Context, opts *sql.TxOptions) (tx Tx, err error) {
-	tx, err = db.BeginTxx(ctx, opts)
-	if err != nil {
-		return tx, err
-	}
-	if ldb, ok := db.(logged); ok && ldb.Logged() {
-		tx = NewLoggedTx(tx, ldb.Colored(), ldb.Output())
-	}
-	return tx, err
-}
